@@ -1,0 +1,49 @@
+{
+    "platform": "番茄小说",
+    "genre": "都市",
+    "chapter_rules": {
+        "min_words_per_chapter": 2000,
+        "max_words_per_chapter": 4000,
+        "recommended_words_per_chapter": 3000,
+        "chapters_per_day_limit": 3,
+        "min_chapters_for_contract": 20
+    },
+    "content_rules": {
+        "sensitive_topics": [
+            "政治敏感", "色情", "暴力血腥", "赌博", "毒品",
+            "宗教极端", "民族歧视", "封建迷信", "自杀自残"
+        ],
+        "banned_phrases": [
+            "共产党", "习近平", "六四", "天安门",
+            "法轮功", "藏独", "疆独", "台独"
+        ],
+        "safe_alternatives": {
+            "国家领导": "公司高层",
+            "政府": "管理层",
+            "警察": "保安"
+        }
+    },
+    "writing_style": {
+        "paragraph_style": "短段落为主，1-3句",
+        "dialogue_ratio": "50-60%",
+        "pacing": "快节奏，每章有钩子",
+        "tone": "口语化，接地气",
+        "forbidden_patterns": [
+            "破折号（——）",
+            "省略号（……）",
+            "连续排比3句以上",
+            "每段4-6句的均匀节奏"
+        ]
+    },
+    "hook_rules": {
+        "chapter_end_hook": "必选，13式中选1种",
+        "chapter_start_hook": "推荐，7式中选1种",
+        "min_hook_strength": "中"
+    },
+    "seo_tips": {
+        "title_length": "6-15字",
+        "title_style": "悬念感/冲突感/身份感",
+        "synopsis_length": "50-100字",
+        "synopsis_must_have": ["主角困境", "金手指/系统", "爽点预期"]
+    }
+}

@@ -1,0 +1,36 @@
+# === 敏感数据 ===
+config/config.json
+config/books_registry.json
+config/creatives.json
+
+# === 用户生成内容 ===
+projects/
+exports/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# === 日志 ===
+*.log
+
+# === 上游仓库 ===
+_repos/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === 系统 ===
+.DS_Store
+Thumbs.db
+
+# === 测试文件 ===
+test_*.py
