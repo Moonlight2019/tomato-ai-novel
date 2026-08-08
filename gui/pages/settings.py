@@ -410,31 +410,9 @@ class SettingsPage(ctk.CTkFrame):
         self.model_list.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
         # 任务分配
-        task_frame = ctk.CTkFrame(tab)
-        task_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        ctk.CTkLabel(task_frame, text="任务模型分配", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
-
-        self.task_vars = {}
-        tasks = [
-            ("architecture_llm", "架构生成"),
-            ("chapter_outline_llm", "大纲生成"),
-            ("final_chapter_llm", "正文写作"),
-            ("consistency_review_llm", "一致性检查"),
-        ]
-
-        config = self.master.get_config()
-        choose = config.get("choose_configs", {})
-        model_names = list(config.get("llm_configs", {}).keys())
-
-        for key, label in tasks:
-            row = ctk.CTkFrame(task_frame, fg_color="transparent")
-            row.pack(fill="x", padx=10, pady=2)
-            ctk.CTkLabel(row, text=f"{label}:", width=120, anchor="w").pack(side="left")
-            var = ctk.StringVar(value=choose.get(key, ""))
-            ctk.CTkOptionMenu(row, variable=var, values=model_names, width=200).pack(side="left", padx=5)
-            self.task_vars[key] = var
-
-        ctk.CTkButton(task_frame, text="💾 保存任务分配", command=self._save_tasks).pack(anchor="w", padx=10, pady=10)
+        self.task_frame = ctk.CTkFrame(tab)
+        self.task_frame.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self._build_task_assignments()
 
     def _create_batch_tab(self):
         tab = self.tabview.add("📝 批量生成")
@@ -555,6 +533,7 @@ class SettingsPage(ctk.CTkFrame):
                     config["llm_configs"][key]["api_key"] = k
                     self.master.save_config(config)
                     self._refresh_model_list()
+                    self._build_task_assignments()
                 dialog.destroy()
 
             ctk.CTkButton(dialog, text="保存", command=save_key, fg_color="#2563eb").pack(pady=10)
@@ -567,6 +546,38 @@ class SettingsPage(ctk.CTkFrame):
             dialog.grab_set()
             ctk.CTkLabel(dialog, text=f"「{name}」已存在", font=ctk.CTkFont(size=13)).pack(pady=20)
             ctk.CTkButton(dialog, text="确定", command=dialog.destroy).pack(pady=10)
+
+    def _build_task_assignments(self):
+        """构建任务模型分配区域（可刷新）"""
+        for w in self.task_frame.winfo_children():
+            w.destroy()
+
+        ctk.CTkLabel(self.task_frame, text="任务模型分配", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
+
+        self.task_vars = {}
+        self.task_menus = {}
+        tasks = [
+            ("architecture_llm", "架构生成"),
+            ("chapter_outline_llm", "大纲生成"),
+            ("final_chapter_llm", "正文写作"),
+            ("consistency_review_llm", "一致性检查"),
+        ]
+
+        config = self.master.get_config()
+        choose = config.get("choose_configs", {})
+        model_names = list(config.get("llm_configs", {}).keys())
+
+        for key, label in tasks:
+            row = ctk.CTkFrame(self.task_frame, fg_color="transparent")
+            row.pack(fill="x", padx=10, pady=2)
+            ctk.CTkLabel(row, text=f"{label}:", width=120, anchor="w").pack(side="left")
+            var = ctk.StringVar(value=choose.get(key, ""))
+            menu = ctk.CTkOptionMenu(row, variable=var, values=model_names, width=200)
+            menu.pack(side="left", padx=5)
+            self.task_vars[key] = var
+            self.task_menus[key] = menu
+
+        ctk.CTkButton(self.task_frame, text="💾 保存任务分配", command=self._save_tasks).pack(anchor="w", padx=10, pady=10)
 
     def _refresh_model_list(self):
         for w in self.model_list.winfo_children():
@@ -595,6 +606,7 @@ class SettingsPage(ctk.CTkFrame):
         config.get("llm_configs", {}).pop(name, None)
         self.master.save_config(config)
         self._refresh_model_list()
+        self._build_task_assignments()
 
     def _save_tasks(self):
         config = self.master.get_config()

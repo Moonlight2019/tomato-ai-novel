@@ -4,8 +4,65 @@
 大纲编辑页 — 查看和编辑章节目录，可重新生成
 """
 import os
+
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置"""
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="final_chapter_llm"):
+    """获取LLM配置"""
+    return _get_llm_for_task(config, task_key)
 import threading
+
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置"""
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="final_chapter_llm"):
+    """获取LLM配置"""
+    return _get_llm_for_task(config, task_key)
 import customtkinter as ctk
+
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置"""
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="final_chapter_llm"):
+    """获取LLM配置"""
+    return _get_llm_for_task(config, task_key)
 
 
 class OutlinePage(ctk.CTkFrame):
@@ -103,7 +160,7 @@ class OutlinePage(ctk.CTkFrame):
 
                 config = self.master.get_config()
                 params = config.get("other_params", {})
-                llm = config["llm_configs"].get("mimo-pro", {})
+                llm = _get_llm(config)
                 filepath = params.get("filepath", "")
 
                 Chapter_blueprint_generate(
@@ -121,7 +178,7 @@ class OutlinePage(ctk.CTkFrame):
 
                 self.after(0, self._on_done)
             except Exception as e:
-                self.after(0, lambda: self._on_error(str(e)))
+                self.after(0, lambda m=str(e): self._on_error(m))
 
         threading.Thread(target=do_gen, daemon=True).start()
 

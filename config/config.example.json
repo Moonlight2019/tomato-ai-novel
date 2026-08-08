@@ -1,39 +1,39 @@
 {
     "llm_configs": {
-        "mimo-pro": {
-            "api_key": "",
-            "base_url": "https://token-plan-cn.xiaomimimo.com/anthropic",
-            "model_name": "mimo-v2.5-pro",
+        "deepseekv4-flash": {
+            "api_key": "example",
+            "base_url": "example",
+            "model_name": "example",
             "temperature": 0.7,
             "max_tokens": 8192,
             "timeout": 600,
-            "interface_format": "mimo"
+            "interface_format": "example"
         },
-        "mimo-standard": {
-            "api_key": "",
-            "base_url": "https://token-plan-cn.xiaomimimo.com/anthropic",
-            "model_name": "mimo-v2.5",
+        "deepseekv4-flash": {
+            "api_key": "example",
+            "base_url": "example",
+            "model_name": "example",
             "temperature": 0.7,
             "max_tokens": 8192,
             "timeout": 600,
-            "interface_format": "mimo"
+            "interface_format": "example"
         }
     },
     "embedding_configs": {
         "Qwen-Embedding": {
             "api_key": "",
-            "base_url": "https://ws-dsckxlnpso0pcmea.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            "base_url": "example",
             "model_name": "text-embedding-v3",
             "retrieval_k": 4,
             "interface_format": "qwen"
         }
     },
     "choose_configs": {
-        "prompt_draft_llm": "mimo-standard",
-        "chapter_outline_llm": "mimo-pro",
-        "architecture_llm": "mimo-pro",
-        "final_chapter_llm": "mimo-pro",
-        "consistency_review_llm": "mimo-standard",
+        "prompt_draft_llm": "example",
+        "chapter_outline_llm": "example",
+        "architecture_llm": "example",
+        "final_chapter_llm": "example",
+        "consistency_review_llm": "example",
         "embedding_llm": "Qwen-Embedding"
     },
     "other_params": {

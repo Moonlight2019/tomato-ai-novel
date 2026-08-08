@@ -99,7 +99,7 @@ class ExportPage(ctk.CTkFrame):
                 out = export_fanqie_txt(filepath, book_name=topic)
                 self.after(0, lambda: self._on_done(out))
             except Exception as e:
-                self.after(0, lambda: self._on_error(str(e)))
+                self.after(0, lambda m=str(e): self._on_error(m))
 
         threading.Thread(target=do_export, daemon=True).start()
 
@@ -116,7 +116,7 @@ class ExportPage(ctk.CTkFrame):
                 out = export_chapters_txt(filepath, book_name=topic)
                 self.after(0, lambda: self._on_done(out))
             except Exception as e:
-                self.after(0, lambda: self._on_error(str(e)))
+                self.after(0, lambda m=str(e): self._on_error(m))
 
         threading.Thread(target=do_export, daemon=True).start()
 

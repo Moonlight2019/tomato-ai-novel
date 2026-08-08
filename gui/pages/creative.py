@@ -10,6 +10,26 @@ import customtkinter as ctk
 from gui.animations import LoadingSpinner, pulse_widget
 
 
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置"""
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="architecture_llm"):
+    """获取LLM配置"""
+    return _get_llm_for_task(config, task_key)
+
+
 class CreativePage(ctk.CTkFrame):
     """创意输入页"""
 
@@ -248,7 +268,7 @@ class CreativePage(ctk.CTkFrame):
                 from llm_adapters import create_llm_adapter
 
                 config = self.master.get_config()
-                llm = config["llm_configs"].get("mimo-pro", {})
+                llm = _get_llm(config)
                 adapter = create_llm_adapter(
                     interface_format=llm.get("interface_format", "mimo"),
                     base_url=llm.get("base_url", ""),
@@ -287,7 +307,8 @@ class CreativePage(ctk.CTkFrame):
 
                 self.after(0, lambda: self._on_synopsis_done(result))
             except Exception as e:
-                self.after(0, lambda: self.status_label.configure(text=f"❌ {str(e)[:60]}", text_color="red"))
+                err_msg = str(e)[:60]
+                self.after(0, lambda m=err_msg: self.status_label.configure(text=f"❌ {m}", text_color="red"))
                 self.after(0, lambda: self.synopsis_btn.configure(state="normal", text="📝 生成简介"))
 
         threading.Thread(target=do_synopsis, daemon=True).start()
@@ -324,7 +345,7 @@ class CreativePage(ctk.CTkFrame):
                 from llm_adapters import create_llm_adapter
 
                 config = self.master.get_config()
-                llm = config["llm_configs"].get("mimo-pro", {})
+                llm = _get_llm(config)
                 adapter = create_llm_adapter(
                     interface_format=llm.get("interface_format", "mimo"),
                     base_url=llm.get("base_url", ""),
@@ -440,7 +461,7 @@ class CreativePage(ctk.CTkFrame):
                 config["other_params"] = params
                 self.master.save_config(config)
 
-                llm = config["llm_configs"].get("mimo-pro", {})
+                llm = _get_llm(config)
                 filepath = params["filepath"]
                 os.makedirs(filepath, exist_ok=True)
 
@@ -461,7 +482,7 @@ class CreativePage(ctk.CTkFrame):
 
                 self.after(0, lambda: self._on_generate_done(topic))
             except Exception as e:
-                self.after(0, lambda: self._on_generate_error(str(e)))
+                self.after(0, lambda m=str(e): self._on_generate_error(m))
 
         threading.Thread(target=do_generate, daemon=True).start()
 
@@ -484,7 +505,7 @@ class CreativePage(ctk.CTkFrame):
 
             config = self.master.get_config()
             params = config.get("other_params", {})
-            llm = config["llm_configs"].get("mimo-pro", {})
+            llm = _get_llm(config)
             filepath = params.get("filepath", "")
 
             Chapter_blueprint_generate(
@@ -502,7 +523,7 @@ class CreativePage(ctk.CTkFrame):
 
             self.after(0, self._on_blueprint_done)
         except Exception as e:
-            self.after(0, lambda: self._on_blueprint_error(str(e)))
+            self.after(0, lambda m=str(e): self._on_blueprint_error(m))
 
     def _on_blueprint_done(self):
         self.progress.set(1.0)

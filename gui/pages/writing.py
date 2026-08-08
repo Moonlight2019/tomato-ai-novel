@@ -9,6 +9,35 @@ import customtkinter as ctk
 from gui.animations import AnimatedProgressBar, pulse_widget
 
 
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置
+    task_key: architecture_llm, chapter_outline_llm, final_chapter_llm, consistency_review_llm
+    """
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    # 回退：找第一个可用的模型
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    # 最后回退：返回第一个模型
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="final_chapter_llm"):
+    """获取正文写作LLM（默认）"""
+    return _get_llm_for_task(config, task_key)
+
+
+def _get_llm_std(config):
+    """获取一致性检查LLM"""
+    return _get_llm_for_task(config, "consistency_review_llm")
+
+
 class WritingPage(ctk.CTkFrame):
     """章节写作页"""
 
@@ -184,7 +213,7 @@ class WritingPage(ctk.CTkFrame):
 
                 config = self.master.get_config()
                 params = config.get("other_params", {})
-                llm = config["llm_configs"].get("mimo-pro", {})
+                llm = _get_llm(config)
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 filepath = abs_filepath
 
@@ -212,7 +241,8 @@ class WritingPage(ctk.CTkFrame):
 
                 self.after(0, lambda: self._on_gen_done(chapter_num, chapter_text))
             except Exception as e:
-                self.after(0, lambda: self._on_gen_error(str(e)))
+                err_msg = str(e)
+                self.after(0, lambda m=err_msg: self._on_gen_error(m))
 
         threading.Thread(target=do_gen, daemon=True).start()
 
@@ -394,8 +424,8 @@ class WritingPage(ctk.CTkFrame):
                 from novel_generator.finalization import finalize_chapter
 
                 params = config.get("other_params", {})
-                llm = config["llm_configs"].get("mimo-pro", {})
-                llm_std = config["llm_configs"].get("mimo-standard", {})
+                llm = _get_llm(config)
+                llm_std = _get_llm_std(config)
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 # 使用绝对路径
                 fp = filepath
@@ -479,7 +509,8 @@ class WritingPage(ctk.CTkFrame):
 
                 self.after(0, lambda: self._on_batch_done(start_ch, end_ch - 1))
             except Exception as e:
-                self.after(0, lambda: self._on_gen_error(str(e)))
+                err_msg = str(e)
+                self.after(0, lambda m=err_msg: self._on_gen_error(m))
 
         threading.Thread(target=do_batch, daemon=True).start()
 

@@ -1,5 +1,11 @@
 # 番茄 AI 写作系统
 
+这是一个完全使用AI完成的项目，如果有帮助到你那是我的荣幸，如果使用时出现任何问题，我推荐你直接AI修复而不是提Issue，那样会更有效率。
+
+首先非常感谢**AI_NovelGenerator**和**oh-story-claudecode**项目，本项目完全基于这两个项目拼接而来，仅仅是做了一个GUI。并没有做出什么很有价值的贡献。
+
+以下完全由AI生成
+
 结合 [AI_NovelGenerator](https://github.com/YILING0013/AI_NovelGenerator) 的自动流水线与 [oh-story-claudecode](https://github.com/worldwonderer/oh-story-claudecode) 的网文方法论，专为番茄小说平台打造的 AI 写作工具。
 
 ## 核心特性

@@ -4,8 +4,65 @@
 市场分析页 — 番茄小说趋势分析和选题建议
 """
 import os
+
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置"""
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="final_chapter_llm"):
+    """获取LLM配置"""
+    return _get_llm_for_task(config, task_key)
 import threading
+
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置"""
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="final_chapter_llm"):
+    """获取LLM配置"""
+    return _get_llm_for_task(config, task_key)
 import customtkinter as ctk
+
+def _get_llm_for_task(config, task_key):
+    """根据任务名称获取对应的LLM配置"""
+    choose = config.get("choose_configs", {})
+    model_name = choose.get(task_key, "")
+    if model_name:
+        llm = config.get("llm_configs", {}).get(model_name, {})
+        if llm:
+            return llm
+    for name, cfg in config.get("llm_configs", {}).items():
+        if cfg.get("api_key"):
+            return cfg
+    models = config.get("llm_configs", {})
+    return list(models.values())[0] if models else {}
+
+
+def _get_llm(config, task_key="final_chapter_llm"):
+    """获取LLM配置"""
+    return _get_llm_for_task(config, task_key)
 
 
 class MarketPage(ctk.CTkFrame):
@@ -69,7 +126,7 @@ class MarketPage(ctk.CTkFrame):
                 from llm_adapters import create_llm_adapter
 
                 config = self.master.get_config()
-                llm = config["llm_configs"].get("mimo-pro", {})
+                llm = _get_llm(config)
                 adapter = create_llm_adapter(
                     interface_format=llm.get("interface_format", "mimo"),
                     base_url=llm.get("base_url", ""),
@@ -109,7 +166,7 @@ class MarketPage(ctk.CTkFrame):
                 from llm_adapters import create_llm_adapter
 
                 config = self.master.get_config()
-                llm = config["llm_configs"].get("mimo-pro", {})
+                llm = _get_llm(config)
                 adapter = create_llm_adapter(
                     interface_format=llm.get("interface_format", "mimo"),
                     base_url=llm.get("base_url", ""),
