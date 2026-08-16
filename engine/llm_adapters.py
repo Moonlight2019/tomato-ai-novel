@@ -113,25 +113,18 @@ def _extract_openai_content(response) -> str:
 
 def _openai_chat_create(client, model_name, prompt, max_tokens, temperature):
     """
-    发起 chat.completions.create，默认带 reasoning_effort='none' 以禁用推理模型思考，
-    避免 DeepSeek 等把思考过程写进 content（章节正文被思考污染）。
-    若网关不支持该参数（报 400/unknown parameter），自动回退为不带参数重试一次。
+    发起 chat.completions.create。
+
+    不主动禁用推理模型的思考（保留 DeepSeek 等的创作规划能力，保证长章节质量）；
+    思考泄漏由解析层 _extract_openai_content 处理——它已跳过 content 数组中的
+    reasoning/thinking 等 part，正文与思考正确分离。
     """
-    kwargs = dict(
+    return client.chat.completions.create(
         model=model_name,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=max_tokens,
         temperature=temperature,
     )
-    try:
-        return client.chat.completions.create(reasoning_effort="none", **kwargs)
-    except Exception as e:
-        msg = str(e).lower()
-        # 网关明确不认该参数 → 回退；其余错误（key 无效/限流/连接）原样抛出
-        if "reasoning_effort" in msg or "unknown parameter" in msg or "unknown argument" in msg:
-            logging.warning("当前网关不支持 reasoning_effort，已回退为不带该参数调用")
-            return client.chat.completions.create(**kwargs)
-        raise
 
 class BaseLLMAdapter:
     """
