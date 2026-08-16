@@ -115,16 +115,26 @@ def _openai_chat_create(client, model_name, prompt, max_tokens, temperature):
     """
     发起 chat.completions.create。
 
-    不主动禁用推理模型的思考（保留 DeepSeek 等的创作规划能力，保证长章节质量）；
-    思考泄漏由解析层 _extract_openai_content 处理——它已跳过 content 数组中的
-    reasoning/thinking 等 part，正文与思考正确分离。
+    带 reasoning_effort='none' 禁用推理模型思考。必要原因（实测）：
+    OpenCode 的 deepseek-v4-flash 在超长任务（如 3000 字章节）时会把多段思考 +
+    重写草稿直接合并进 content 字符串（而非 reasoning_content），导致正文被污染、
+    无法可靠剥离。禁用思考后 content 为纯正文，质量正常（短/中任务本就干净）。
+    若网关不支持该参数（400/unknown parameter），自动回退为不带参数重试一次。
     """
-    return client.chat.completions.create(
+    kwargs = dict(
         model=model_name,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=max_tokens,
         temperature=temperature,
     )
+    try:
+        return client.chat.completions.create(reasoning_effort="none", **kwargs)
+    except Exception as e:
+        msg = str(e).lower()
+        if "reasoning_effort" in msg or "unknown parameter" in msg or "unknown argument" in msg:
+            logging.warning("当前网关不支持 reasoning_effort，已回退为不带该参数调用")
+            return client.chat.completions.create(**kwargs)
+        raise
 
 class BaseLLMAdapter:
     """
