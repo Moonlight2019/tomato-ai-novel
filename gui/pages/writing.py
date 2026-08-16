@@ -217,6 +217,10 @@ class WritingPage(ctk.CTkFrame):
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 filepath = abs_filepath
 
+                # 注入与题材匹配的增强版 prompt
+                from enhanced_prompts import patch_prompt_definitions
+                patch_prompt_definitions(params.get("genre", "") or "都市")
+
                 chapter_text = generate_chapter_draft(
                     api_key=llm.get("api_key", ""),
                     base_url=llm.get("base_url", ""),
@@ -309,6 +313,10 @@ class WritingPage(ctk.CTkFrame):
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 filepath = abs_filepath
 
+                # 注入与题材匹配的增强版 prompt
+                from enhanced_prompts import patch_prompt_definitions
+                patch_prompt_definitions(params.get("genre", "") or "都市")
+
                 finalize_chapter(
                     novel_number=chapter_num,
                     word_number=params.get("word_number", 3000),
@@ -362,30 +370,31 @@ class WritingPage(ctk.CTkFrame):
                 start_ch = last + 1
 
         if start_ch > 1:
-            # 弹窗询问是否续传
+            # 弹窗询问续传方式
+            current_ch = self.current_chapter  # 用户当前选中的章节
             dialog = ctk.CTkToplevel(self)
-            dialog.title("续传确认")
-            dialog.geometry("400x180")
+            dialog.title("批量生成")
+            dialog.geometry("450x200")
             dialog.transient(self.master)
             dialog.grab_set()
-            ctk.CTkLabel(dialog, text=f"已生成到第{start_ch - 1}章\n是否从第{start_ch}章继续生成？",
+            ctk.CTkLabel(dialog, text=f"已生成到第{start_ch - 1}章\n选择从哪里开始批量生成：",
                        font=ctk.CTkFont(size=14)).pack(pady=20)
             btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
             btn_frame.pack(pady=10)
             result = {"choice": "cancel"}
-            def from_start():
-                result["choice"] = "start"
+            def from_current():
+                result["choice"] = "current"
                 dialog.destroy()
             def from_resume():
                 result["choice"] = "resume"
                 dialog.destroy()
-            ctk.CTkButton(btn_frame, text="从头开始", command=from_start).pack(side="left", padx=10)
+            ctk.CTkButton(btn_frame, text=f"从当前章节(第{current_ch}章)开始", command=from_current).pack(side="left", padx=10)
             ctk.CTkButton(btn_frame, text=f"从第{start_ch}章继续", command=from_resume, fg_color="#2563eb").pack(side="left", padx=10)
             dialog.wait_window()
             if result["choice"] == "cancel":
                 return
-            elif result["choice"] == "start":
-                start_ch = 1
+            elif result["choice"] == "current":
+                start_ch = current_ch
 
         config = self.master.get_config()
         total = config.get("other_params", {}).get("num_chapters", 0)
@@ -429,6 +438,9 @@ class WritingPage(ctk.CTkFrame):
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 # 使用绝对路径
                 fp = filepath
+                # 注入与题材匹配的增强版 prompt
+                from enhanced_prompts import patch_prompt_definitions
+                patch_prompt_definitions(params.get("genre", "") or "都市")
                 batch_cfg = config.get("batch_settings", {})
                 delay = batch_cfg.get("delay_between_chapters", 2)
                 max_retries = batch_cfg.get("max_retries", 3)

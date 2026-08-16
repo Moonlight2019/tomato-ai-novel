@@ -163,6 +163,10 @@ class OutlinePage(ctk.CTkFrame):
                 llm = _get_llm(config)
                 filepath = params.get("filepath", "")
 
+                # 注入与题材匹配的增强版 prompt
+                from enhanced_prompts import patch_prompt_definitions
+                patch_prompt_definitions(params.get("genre", "") or "都市")
+
                 Chapter_blueprint_generate(
                     interface_format=llm.get("interface_format", "mimo"),
                     api_key=llm.get("api_key", ""),
