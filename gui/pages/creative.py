@@ -30,6 +30,15 @@ def _get_llm(config, task_key="architecture_llm"):
     return _get_llm_for_task(config, task_key)
 
 
+def _precheck(config, task_key="architecture_llm", force=False):
+    """预检指定任务的 LLM 配置，返回 (ok, msg)；失败时 GUI 可阻断并提示。"""
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "engine"))
+    from llm_adapters import precheck_llm_config
+    return precheck_llm_config(_get_llm(config, task_key), force=force)
+
+
+
 class CreativePage(ctk.CTkFrame):
     """创意输入页"""
 
@@ -287,6 +296,14 @@ class CreativePage(ctk.CTkFrame):
                 from llm_adapters import create_llm_adapter
 
                 config = self.master.get_config()
+
+                # 预检，避免用不可用模型
+                ok_pre, msg_pre = _precheck(config)
+                if not ok_pre:
+                    self.after(0, lambda m=msg_pre: self.status_label.configure(
+                        text=f"❌ 当前模型不可用：{m}", text_color="red"))
+                    return
+
                 llm = _get_llm(config)
                 adapter = create_llm_adapter(
                     interface_format=llm.get("interface_format", "mimo"),
@@ -521,6 +538,15 @@ class CreativePage(ctk.CTkFrame):
                 from llm_adapters import create_llm_adapter
 
                 config = self.master.get_config()
+
+                # 预检，避免用不可用模型
+                ok_pre, msg_pre = _precheck(config)
+                if not ok_pre:
+                    self.after(0, lambda m=msg_pre: self.status_label.configure(
+                        text=f"❌ 当前模型不可用：{m}", text_color="red"))
+                    self.after(0, lambda: self.synopsis_btn.configure(state="normal", text="📝 生成简介"))
+                    return
+
                 llm = _get_llm(config)
                 adapter = create_llm_adapter(
                     interface_format=llm.get("interface_format", "mimo"),
@@ -598,6 +624,15 @@ class CreativePage(ctk.CTkFrame):
                 from llm_adapters import create_llm_adapter
 
                 config = self.master.get_config()
+
+                # 预检，避免用不可用模型后弹空窗
+                ok_pre, msg_pre = _precheck(config)
+                if not ok_pre:
+                    self.after(0, lambda m=msg_pre: self.status_label.configure(
+                        text=f"❌ 当前模型不可用：{m}", text_color="red"))
+                    self.after(0, lambda: self.suggest_btn.configure(state="normal", text="💡 AI创意建议"))
+                    return
+
                 llm = _get_llm(config)
                 adapter = create_llm_adapter(
                     interface_format=llm.get("interface_format", "openai"),
@@ -713,6 +748,12 @@ class CreativePage(ctk.CTkFrame):
                 from novel_generator.architecture import Novel_architecture_generate
 
                 config = self.master.get_config()
+
+                # 生成架构前预检模型连通性
+                ok_pre, msg_pre = _precheck(config, "architecture_llm")
+                if not ok_pre:
+                    raise RuntimeError(f"当前模型不可用：{msg_pre}")
+
                 params = config.get("other_params", {})
                 params["topic"] = topic
                 params["genre"] = genre

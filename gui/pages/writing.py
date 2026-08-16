@@ -38,6 +38,16 @@ def _get_llm_std(config):
     return _get_llm_for_task(config, "consistency_review_llm")
 
 
+# ================== 预检（委托引擎层 precheck_llm_config） ==================
+
+def _precheck_llm(llm: dict) -> tuple:
+    """开始长任务前预检当前 LLM 配置（委托引擎层带缓存实现），返回 (ok: bool, msg: str)。"""
+    import sys, os
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "engine"))
+    from llm_adapters import precheck_llm_config
+    return precheck_llm_config(llm)
+
+
 class WritingPage(ctk.CTkFrame):
     """章节写作页"""
 
@@ -217,6 +227,11 @@ class WritingPage(ctk.CTkFrame):
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 filepath = abs_filepath
 
+                # 开始前预检模型连通性（带缓存），失败直接抛出可读诊断
+                ok_pre, msg_pre = _precheck_llm(llm)
+                if not ok_pre:
+                    raise RuntimeError(f"当前模型不可用：{msg_pre}")
+
                 # 注入与题材匹配的增强版 prompt
                 from enhanced_prompts import patch_prompt_definitions
                 patch_prompt_definitions(params.get("genre", "") or "都市")
@@ -309,9 +324,14 @@ class WritingPage(ctk.CTkFrame):
 
                 config = self.master.get_config()
                 params = config.get("other_params", {})
-                llm = config["llm_configs"].get("mimo-standard", {})
+                llm = _get_llm(config)
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 filepath = abs_filepath
+
+                # 定稿前预检模型连通性
+                ok_pre, msg_pre = _precheck_llm(llm)
+                if not ok_pre:
+                    raise RuntimeError(f"当前模型不可用：{msg_pre}")
 
                 # 注入与题材匹配的增强版 prompt
                 from enhanced_prompts import patch_prompt_definitions
@@ -438,6 +458,10 @@ class WritingPage(ctk.CTkFrame):
                 embed = config.get("embedding_configs", {}).get("Qwen-Embedding", {})
                 # 使用绝对路径
                 fp = filepath
+                # 开始前预检模型连通性，失败直接退出（被外层 except 捕获显示）
+                ok_pre, msg_pre = _precheck_llm(llm)
+                if not ok_pre:
+                    raise RuntimeError(f"当前模型不可用：{msg_pre}")
                 # 注入与题材匹配的增强版 prompt
                 from enhanced_prompts import patch_prompt_definitions
                 patch_prompt_definitions(params.get("genre", "") or "都市")

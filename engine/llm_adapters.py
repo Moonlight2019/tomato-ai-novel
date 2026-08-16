@@ -563,3 +563,102 @@ def create_llm_adapter(
         return MimoAdapter(api_key, base_url, model_name, max_tokens, temperature, timeout)
     else:
         raise ValueError(f"Unknown interface_format: {interface_format}")
+
+
+# 已知需要特殊 base_url 的供应商提示（用于给无效地址提供可操作诊断）
+_SPECIAL_BASE_URL_HINTS = {
+    "opencode": "OpenCode Go 的正确地址是 https://opencode.ai/zen/go/v1（不是 api.opencode.ai）",
+    "mimo": "请确认为官方 OpenCode/提供商给出的 anthropic 接口地址",
+}
+
+
+def diagnose_llm_config(
+    interface_format: str,
+    base_url: str,
+    model_name: str,
+    api_key: str,
+    temperature: float = 0.7,
+    max_tokens: int = 4096,
+    timeout: int = 30,
+) -> tuple:
+    """
+    预检一个 LLM 配置是否可用，返回 (ok: bool, message: str)。
+
+    用于在切换模型 / 开始长任务前做轻量连通性自检，避免用坏配置跑长篇到一半才报错。
+    诊断优先级：缺 key / 缺地址 / 地址或接口错误(404等) / key 无效(401) / 返回空 / 成功。
+
+    此函数只做诊断，不抛出异常；message 是同 g 可读的中文提示。
+    """
+    interface_format = (interface_format or "").strip().lower()
+
+    # 1) 缺 key：很多适配器缺 key 时也能构造，必须显式拦截
+    if not api_key:
+        return False, "未填写 API Key，请先在「设置-模型配置」里填入"
+
+    # 2) 缺 base_url
+    if not (base_url or "").strip():
+        return False, "未填写接口地址(base_url)，请检查模型配置"
+
+    # 3) 已知特殊地址的提示：base_url 明显不是该供应商时给操作建议
+    for token, hint in _SPECIAL_BASE_URL_HINTS.items():
+        if token in interface_format or token in (base_url or "").lower():
+            if token == "opencode" and "zen/go/v1" not in base_url:
+                return False, f"OpenCode 接口地址可能不对：{hint}"
+
+    try:
+        adapter = create_llm_adapter(
+            interface_format=interface_format,
+            base_url=base_url,
+            model_name=model_name or "",
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+        )
+        response = adapter.invoke("请只回复两个字的词：测试")
+    except Exception as e:
+        msg = str(e)
+        # 401 = key 无效；404 = 地址/接口错
+        if "401" in msg or "unauthorized" in msg.lower() or "invalid api" in msg.lower():
+            return False, f"API Key 无效或未授权(401)：请检查 key 是否正确、是否有该模型权限"
+        if "404" in msg or "not found" in msg.lower():
+            return False, f"接口地址或模型不存在(404)：多为 base_url/model_name 配错，请检查"
+        if "429" in msg or "quota" in msg.lower() or "rate limit" in msg.lower():
+            return False, f"限流或配额不足(429)：请稍后重试或检查账户额度"
+        # 其他异常(连接/超时/SSL等)
+        return False, f"模型调用出错：{msg[:120]}"
+
+    # 4) 返回为空：地址对但模型没返回正文（如纯推理流解析失败 / 模型不可用）
+    if not (response or "").strip():
+        return False, "模型没有返回正文：可能是模型参数不匹配或该模型不支持当前调用方式，请检查"
+
+    return True, "✅ 连接正常"
+
+
+# 会话级预检缓存：key = (format, base_url, model, api_key)，避免每次生成都重复发测试请求
+_precheck_cache = {}
+
+
+def precheck_llm_config(llm: dict, force: bool = False) -> tuple:
+    """
+    带缓存的 LLM 预检（供 GUI 在开始长任务前调用）。
+    返回 (ok, msg)；同一配置只测一次（缓存），force=True 可强制重测。
+    缺 LLM/缺接口格式时放行（留给上层逻辑处理），避免误阻断。
+    """
+    if not llm:
+        return True, ""
+    fp = llm.get("interface_format", "")
+    bu = llm.get("base_url", "")
+    mn = llm.get("model_name", "")
+    ak = llm.get("api_key", "")
+    if not fp:
+        return True, ""
+    cache_key = (fp, bu, mn, ak)
+    if not force and cache_key in _precheck_cache:
+        return _precheck_cache[cache_key]
+    ok, msg = diagnose_llm_config(
+        fp, bu, mn, ak,
+        llm.get("temperature", 0.7), llm.get("max_tokens", 4096), llm.get("timeout", 30),
+    )
+    _precheck_cache[cache_key] = (ok, msg)
+    return ok, msg

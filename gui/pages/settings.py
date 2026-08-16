@@ -599,8 +599,34 @@ class SettingsPage(ctk.CTkFrame):
 
             has_key = "✓" if cfg.get("api_key") else "✗"
             color = "green" if cfg.get("api_key") else "red"
-            ctk.CTkLabel(row, text=f"Key:{has_key}", text_color=color, width=60).pack(side="left")
+            key_lbl = ctk.CTkLabel(row, text=f"Key:{has_key}", text_color=color, width=40)
+            key_lbl.pack(side="left")
 
+            # 测试连通性（预检）：用该模型的地址/key 发极小请求，失败会给可读诊断
+            # 结果直接显示在行内右侧的一个小 label 上，不依赖全局状态。
+            result_lbl = ctk.CTkLabel(row, text="", text_color="gray60", width=160, anchor="w")
+            result_lbl.pack(side="right", padx=4)
+
+            def _test(n=name, c=cfg, lbl=result_lbl):
+                import threading as _t
+                lbl.configure(text="…测试中", text_color="gray60")
+                def run():
+                    import sys, os
+                    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "engine"))
+                    from llm_adapters import diagnose_llm_config
+                    ok, msg = diagnose_llm_config(
+                        c.get("interface_format", ""), c.get("base_url", ""),
+                        c.get("model_name", ""), c.get("api_key", ""),
+                        c.get("temperature", 0.7), c.get("max_tokens", 4096),
+                        c.get("timeout", 30),
+                    )
+                    self.after(0, lambda: lbl.configure(
+                        text=("✅ 可用" if ok else "❌ " + msg),
+                        text_color=("green" if ok else "red")))
+                _t.Thread(target=run, daemon=True).start()
+
+            ctk.CTkButton(row, text="⚡测试", width=60, height=25,
+                          command=_test).pack(side="right", padx=3)
             ctk.CTkButton(row, text="🗑", width=30, height=25, fg_color="#dc2626",
                          command=lambda n=name: self._delete_model(n)).pack(side="right", padx=5)
 
