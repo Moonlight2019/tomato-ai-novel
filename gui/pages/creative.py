@@ -63,7 +63,7 @@ class CreativePage(ctk.CTkFrame):
         content = ctk.CTkFrame(self, fg_color="transparent")
         content.grid(row=1, column=0, sticky="nsew", padx=30, pady=10)
         content.grid_columnconfigure(0, weight=1)
-        content.grid_rowconfigure(2, weight=1)
+        content.grid_rowconfigure(3, weight=1)
 
         # 历史记录栏
         history_frame = ctk.CTkFrame(content, fg_color="transparent")
@@ -118,9 +118,27 @@ class CreativePage(ctk.CTkFrame):
         self.wordcount_var = ctk.StringVar(value="3000")
         ctk.CTkEntry(params_frame, textvariable=self.wordcount_var, width=80).grid(row=1, column=3, padx=5, pady=8, sticky="w")
 
+        # 风格选择区
+        style_frame = ctk.CTkFrame(content, fg_color="transparent")
+        style_frame.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        ctk.CTkLabel(style_frame, text="风格:").pack(side="left", padx=(15, 5))
+        self.style_var = ctk.StringVar(value="")
+        self.style_menu = ctk.CTkOptionMenu(
+            style_frame, variable=self.style_var, width=170,
+            values=[], command=self._on_style_change
+        )
+        self.style_menu.pack(side="left")
+        self.style_desc_label = ctk.CTkLabel(style_frame, text="", text_color="gray60",
+                                             font=ctk.CTkFont(size=12))
+        self.style_desc_label.pack(side="left", padx=8)
+        ctk.CTkButton(style_frame, text="⚙️ 自定义", width=80, height=28,
+                      command=self._manage_styles).pack(side="right", padx=(5, 15))
+        ctk.CTkButton(style_frame, text="✨ AI推荐", width=90, height=28,
+                      command=self._ai_recommend_style).pack(side="right", padx=5)
+
         # 文本输入区
         self.input_text = ctk.CTkTextbox(content, font=ctk.CTkFont(size=14))
-        self.input_text.grid(row=2, column=0, sticky="nsew")
+        self.input_text.grid(row=3, column=0, sticky="nsew")
         self.input_text.insert("1.0",
             "在此输入你的创意、想法、摘要或小说开头...\n\n"
             "示例：\n"
@@ -134,7 +152,7 @@ class CreativePage(ctk.CTkFrame):
 
         # 按钮区
         btn_frame = ctk.CTkFrame(content, fg_color="transparent")
-        btn_frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        btn_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
 
         self.suggest_btn = ctk.CTkButton(
             btn_frame, text="💡 AI创意建议", font=ctk.CTkFont(size=13),
@@ -166,7 +184,7 @@ class CreativePage(ctk.CTkFrame):
 
         # 简介显示区
         synopsis_frame = ctk.CTkFrame(content)
-        synopsis_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        synopsis_frame.grid(row=5, column=0, sticky="ew", pady=(10, 0))
         ctk.CTkLabel(synopsis_frame, text="📖 小说简介", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(10, 5))
         self.synopsis_text = ctk.CTkTextbox(synopsis_frame, height=120, font=ctk.CTkFont(size=13))
         self.synopsis_text.pack(fill="x", padx=10, pady=(0, 10))
@@ -176,6 +194,234 @@ class CreativePage(ctk.CTkFrame):
         # 初始化历史
         self.creatives_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "creatives.json")
         self._refresh_history()
+        self._init_style()
+
+    # ================== 风格 ==================
+
+    def _init_style(self):
+        """加载风格下拉框，并恢复当前配置里记住的风格。"""
+        self._refresh_style_menu()
+        style = self.master.get_config().get("other_params", {}).get("style", "")
+        if style and style in self._style_names():
+            self.style_var.set(style)
+        self._update_style_desc()
+
+    def _style_names(self) -> list:
+        from engine.style_presets import get_all_styles
+        return [s["name"] for s in get_all_styles()]
+
+    def _refresh_style_menu(self):
+        names = ["无（不套用）"] + self._style_names()
+        self.style_menu.configure(values=names)
+        if self.style_var.get() not in names:
+            self.style_var.set(names[0])
+
+    def _update_style_desc(self):
+        from engine.style_presets import get_all_styles
+        name = self.style_var.get()
+        if name == "无（不套用）":
+            self.style_desc_label.configure(text="不套用任何风格")
+            return
+        for s in get_all_styles():
+            if s["name"] == name:
+                self.style_desc_label.configure(text=s.get("desc", ""))
+                return
+        self.style_desc_label.configure(text="")
+
+    def _on_style_change(self, value):
+        self._update_style_desc()
+
+    def _current_style_name(self) -> str:
+        name = self.style_var.get()
+        return "" if name == "无（不套用）" else name
+
+    def _update_book_registry(self, topic, genre, style, total_chapters):
+        """把这本书的信息（含风格）同步到书架注册表，方便打开书时恢复风格。"""
+        import time as _t
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "books_registry.json")
+        data = {"books": []}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {"books": []}
+        data.setdefault("books", [])
+        found = None
+        for b in data["books"]:
+            if b.get("name") == topic:
+                found = b
+                break
+        if found is None:
+            found = {
+                "name": topic, "genre": genre, "total_chapters": total_chapters,
+                "chapters_generated": 0, "description": "",
+                "created": _t.strftime("%Y-%m-%d %H:%M:%S"),
+                "filepath": os.path.join("projects", topic),
+            }
+            data["books"].append(found)
+        found["genre"] = genre
+        found["style"] = style
+        found["total_chapters"] = total_chapters
+        found["modified"] = _t.strftime("%Y-%m-%d %H:%M:%S")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def _ai_recommend_style(self):
+        """根据创意文本，让 AI 从现有风格里推荐最匹配的一个。"""
+        text = self.input_text.get("1.0", "end-1c").strip()
+        if len(text) < 10:
+            self.status_label.configure(text="先在下方输入创意，再点 AI 推荐", text_color="red")
+            return
+
+        from engine.style_presets import get_all_styles
+        styles = get_all_styles()
+        if not styles:
+            return
+
+        def do_recommend():
+            try:
+                import sys
+                sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "engine"))
+                from llm_adapters import create_llm_adapter
+
+                config = self.master.get_config()
+                llm = _get_llm(config)
+                adapter = create_llm_adapter(
+                    interface_format=llm.get("interface_format", "mimo"),
+                    base_url=llm.get("base_url", ""),
+                    model_name=llm.get("model_name", "mimo-v2.5-pro"),
+                    api_key=llm.get("api_key", ""),
+                    temperature=0.2,
+                    max_tokens=100,
+                    timeout=60
+                )
+                candidate_lines = "\n".join(f"- {s['name']}：{s.get('desc', '')}" for s in styles)
+                prompt = (
+                    f"你是一个网文风格策划。下面是可用的小说风格列表：\n{candidate_lines}\n\n"
+                    f"请根据下面这段小说创意，从列表中挑选最匹配的一个风格，"
+                    f"只输出风格名本身，不要输出任何其它内容：\n\n{text[:2000]}"
+                )
+                result = (adapter.invoke(prompt) or "").strip()
+                # 用名称做宽松匹配，找不到就回退到第一个含该词或完全不改
+                picked = None
+                for s in styles:
+                    if result == s["name"] or s["name"] in result:
+                        picked = s["name"]
+                        break
+                if picked is None:
+                    # 尝试去掉可能的标点/前缀后缀
+                    result_clean = result.replace("“", "").replace("”", "").replace("风格", "").strip()
+                    for s in styles:
+                        if s["name"] in result_clean or result_clean in s["name"]:
+                            picked = s["name"]
+                            break
+                self.after(0, lambda n=picked: self._on_ai_style_done(n))
+            except Exception as e:
+                self.after(0, lambda m=str(e): self.status_label.configure(text=f"❌ AI推荐失败: {m}", text_color="red"))
+
+        self.status_label.configure(text="AI 正在推荐风格...", text_color="gray60")
+        threading.Thread(target=do_recommend, daemon=True).start()
+
+    def _on_ai_style_done(self, style_name):
+        if style_name:
+            self.style_var.set(style_name)
+            self._update_style_desc()
+            self.status_label.configure(text=f"✅ AI 推荐：{style_name}", text_color="green")
+        else:
+            self.status_label.configure(text="⚠️ AI 未识别出合适风格，请手动选择", text_color="orange")
+
+    def _manage_styles(self):
+        """自定义风格管理：新建 / 编辑 / 删除。"""
+        from engine.style_presets import get_all_styles, add_custom_style, delete_custom_style, BUILTIN_STYLES
+        builtin_names = {s["name"] for s in BUILTIN_STYLES}
+        styles = [s for s in get_all_styles() if s["name"] not in builtin_names]
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("自定义风格")
+        dialog.geometry("560x420")
+        dialog.transient(self.master)
+        dialog.grab_set()
+
+        ctk.CTkLabel(dialog, text="自定义风格（同名会覆盖内置）", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(15, 5))
+
+        list_frame = ctk.CTkScrollableFrame(dialog, height=220)
+        list_frame.pack(fill="both", expand=True, padx=15, pady=5)
+
+        def refresh_list():
+            for w in list_frame.winfo_children():
+                w.destroy()
+            if not styles:
+                ctk.CTkLabel(list_frame, text="还没有自定义风格，点下方「新建」添加", text_color="gray60").pack(pady=15)
+                return
+            for i, s in enumerate(styles):
+                row = ctk.CTkFrame(list_frame)
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text=s["name"], font=ctk.CTkFont(weight="bold"), width=120, anchor="w").pack(side="left", padx=8)
+                ctk.CTkLabel(row, text=s.get("desc", ""), text_color="gray60", anchor="w").pack(side="left", fill="x", expand=True)
+                ctk.CTkButton(row, text="✏️", width=34, height=26,
+                              command=lambda s=s: edit_style(s)).pack(side="right", padx=3)
+                ctk.CTkButton(row, text="🗑", width=34, height=26, fg_color="#dc2626",
+                              command=lambda s=s: delete_style(s)).pack(side="right", padx=3)
+
+        def open_editor(preset=None):
+            editor = ctk.CTkToplevel(dialog)
+            editor.title("编辑风格" if preset else "新建风格")
+            editor.geometry("480x430")
+            editor.transient(dialog)
+            editor.grab_set()
+            ctk.CTkLabel(editor, text="风格名称:").pack(anchor="w", padx=15, pady=(12, 2))
+            name_entry = ctk.CTkEntry(editor)
+            name_entry.pack(fill="x", padx=15)
+            ctk.CTkLabel(editor, text="一句话说明（显示在下拉框旁）:").pack(anchor="w", padx=15, pady=(8, 2))
+            desc_entry = ctk.CTkEntry(editor)
+            desc_entry.pack(fill="x", padx=15)
+            ctk.CTkLabel(editor, text="风格指令（会拼入创意指导，可写：基调/节奏/文风/冲突/情感）:",
+                         anchor="w").pack(anchor="w", padx=15, pady=(8, 2))
+            block_text = ctk.CTkTextbox(editor, height=180)
+            block_text.pack(fill="x", padx=15, pady=(0, 10))
+            if preset:
+                name_entry.insert(0, preset.get("name", ""))
+                desc_entry.insert(0, preset.get("desc", ""))
+                block_text.insert("1.0", preset.get("block", ""))
+
+            def save():
+                name = name_entry.get().strip()
+                if not name:
+                    return
+                add_custom_style({
+                    "name": name,
+                    "desc": desc_entry.get().strip(),
+                    "block": block_text.get("1.0", "end-1c").strip(),
+                })
+                nonlocal styles
+                styles = [s for s in get_all_styles() if s["name"] not in builtin_names]
+                refresh_list()
+                self._refresh_style_menu()
+                editor.destroy()
+
+            btn_frame = ctk.CTkFrame(editor, fg_color="transparent")
+            btn_frame.pack(pady=10)
+            ctk.CTkButton(btn_frame, text="取消", command=editor.destroy, fg_color="gray50").pack(side="left", padx=10)
+            ctk.CTkButton(btn_frame, text="保存", command=save, fg_color="#2563eb").pack(side="left", padx=10)
+
+        def edit_style(s):
+            open_editor(s)
+
+        def delete_style(s):
+            delete_custom_style(s["name"])
+            nonlocal styles
+            styles = [x for x in styles if x["name"] != s["name"]]
+            refresh_list()
+            self._refresh_style_menu()
+
+        refresh_list()
+
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=10)
+        ctk.CTkButton(btn_frame, text="➕ 新建", command=lambda: open_editor(), fg_color="#2563eb").pack(side="left", padx=10)
+        ctk.CTkButton(btn_frame, text="关闭", command=dialog.destroy, fg_color="gray50").pack(side="left", padx=10)
 
     def _load_creatives(self) -> list:
         if os.path.exists(self.creatives_path):
@@ -212,6 +458,13 @@ class CreativePage(ctk.CTkFrame):
             self.wordcount_var.set(str(c.get("wordcount", 3000)))
             self.input_text.delete("1.0", "end")
             self.input_text.insert("1.0", c.get("text", ""))
+            # 恢复当时使用的风格
+            style = c.get("style", "")
+            if style in self._style_names():
+                self.style_var.set(style)
+            else:
+                self.style_var.set("无（不套用）")
+            self._update_style_desc()
 
     def _delete_history(self):
         """删除选中的历史创意"""
@@ -227,12 +480,12 @@ class CreativePage(ctk.CTkFrame):
             self._refresh_history()
             self.history_var.set("")
 
-    def _save_to_history(self, title, genre, chapters, wordcount, text):
+    def _save_to_history(self, title, genre, chapters, wordcount, text, style=""):
         import time
         creatives = self._load_creatives()
         creatives.insert(0, {
             "title": title, "genre": genre, "chapters": chapters,
-            "wordcount": wordcount, "text": text,
+            "wordcount": wordcount, "text": text, "style": style,
             "time": time.strftime("%Y-%m-%d %H:%M:%S"),
         })
         # 只保留最近50条
@@ -347,7 +600,7 @@ class CreativePage(ctk.CTkFrame):
                 config = self.master.get_config()
                 llm = _get_llm(config)
                 adapter = create_llm_adapter(
-                    interface_format=llm.get("interface_format", "mimo"),
+                    interface_format=llm.get("interface_format", "openai"),
                     base_url=llm.get("base_url", ""),
                     model_name=llm.get("model_name", "mimo-v2.5-pro"),
                     api_key=llm.get("api_key", ""),
@@ -375,10 +628,17 @@ class CreativePage(ctk.CTkFrame):
 4. 【核心设定】描述
 5. 【核心设定】描述"""
 
-                result = adapter.invoke(prompt)
-                self.after(0, lambda: self._show_suggestions(result))
+                result = (adapter.invoke(prompt) or "").strip()
+                if result:
+                    self.after(0, lambda r=result: self._show_suggestions(r))
+                else:
+                    self.after(0, lambda: self.status_label.configure(
+                        text="❌ 模型未返回内容，请检查模型配置或稍后重试", text_color="red"))
+                    self.after(0, lambda: self.suggest_btn.configure(state="normal", text="💡 AI创意建议"))
             except Exception as e:
-                self.after(0, lambda: self.status_label.configure(text=f"❌ {e}", text_color="red"))
+                import traceback
+                traceback.print_exc()
+                self.after(0, lambda m=str(e): self.status_label.configure(text=f"❌ {m}", text_color="red"))
                 self.after(0, lambda: self.suggest_btn.configure(state="normal", text="💡 AI创意建议"))
 
         threading.Thread(target=do_suggest, daemon=True).start()
@@ -428,13 +688,18 @@ class CreativePage(ctk.CTkFrame):
         num_chapters = int(self.chapters_var.get())
         word_number = int(self.wordcount_var.get())
         user_guidance = self.input_text.get("1.0", "end-1c").strip()
+        style_name = self._current_style_name()
 
         if not topic:
             self.status_label.configure(text="请输入书名", text_color="red")
             return
 
+        # 把风格指令块拼进创意指导（整本书统一生效：设定/大纲/正文）
+        from engine.style_presets import compose_guidance
+        effective_guidance = compose_guidance(user_guidance, style_name)
+
         # 保存到历史
-        self._save_to_history(topic, genre, num_chapters, word_number, user_guidance)
+        self._save_to_history(topic, genre, num_chapters, word_number, user_guidance, style_name)
 
         self.generate_btn.configure(state="disabled", text="生成中...")
         self.progress.set(0.1)
@@ -451,19 +716,26 @@ class CreativePage(ctk.CTkFrame):
                 params = config.get("other_params", {})
                 params["topic"] = topic
                 params["genre"] = genre
+                params["style"] = style_name
                 params["num_chapters"] = num_chapters
                 params["word_number"] = word_number
-                params["user_guidance"] = user_guidance
+                params["user_guidance"] = effective_guidance
                 params["filepath"] = os.path.join(
                     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
                     "projects", topic
                 )
                 config["other_params"] = params
                 self.master.save_config(config)
+                # 把风格等同步到书架注册表，方便打开书时恢复
+                self._update_book_registry(topic, genre, style_name, num_chapters)
 
                 llm = _get_llm(config)
                 filepath = params["filepath"]
                 os.makedirs(filepath, exist_ok=True)
+
+                # 注入与题材匹配的增强版 prompt（含题材公式、基调控制，避免误导向黑暗阴谋）
+                from enhanced_prompts import patch_prompt_definitions
+                patch_prompt_definitions(genre or "都市")
 
                 Novel_architecture_generate(
                     interface_format=llm.get("interface_format", "mimo"),
@@ -474,7 +746,7 @@ class CreativePage(ctk.CTkFrame):
                     number_of_chapters=num_chapters,
                     word_number=word_number,
                     filepath=filepath,
-                    user_guidance=user_guidance,
+                    user_guidance=effective_guidance,
                     temperature=llm.get("temperature", 0.7),
                     max_tokens=llm.get("max_tokens", 8192),
                     timeout=llm.get("timeout", 600),
@@ -507,6 +779,10 @@ class CreativePage(ctk.CTkFrame):
             params = config.get("other_params", {})
             llm = _get_llm(config)
             filepath = params.get("filepath", "")
+
+            # 注入与题材匹配的增强版 prompt
+            from enhanced_prompts import patch_prompt_definitions
+            patch_prompt_definitions(params.get("genre", "") or "都市")
 
             Chapter_blueprint_generate(
                 interface_format=llm.get("interface_format", "mimo"),

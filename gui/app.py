@@ -187,7 +187,16 @@ class NovelApp(ctk.CTk):
     def get_config(self) -> dict:
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
+                config = json.load(f)
+            # 统一把相对 filepath 解析成绝对路径（项目根 = CONFIG_PATH 所在目录的父目录），
+            # 避免 CWD 变化时生成/读取项目文件找不到。
+            project_root = os.path.dirname(os.path.dirname(CONFIG_PATH))
+            fp = (config.get("other_params") or {}).get("filepath", "")
+            if fp and not os.path.isabs(fp):
+                config.setdefault("other_params", {})["filepath"] = os.path.normpath(
+                    os.path.join(project_root, fp)
+                )
+            return config
         except Exception:
             return {}
 

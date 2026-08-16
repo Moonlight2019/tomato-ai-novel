@@ -184,6 +184,7 @@ class BookshelfPage(ctk.CTkFrame):
             book = {
                 "name": name,
                 "genre": genre,
+                "style": "",
                 "total_chapters": total,
                 "chapters_generated": 0,
                 "description": desc,
@@ -209,6 +210,7 @@ class BookshelfPage(ctk.CTkFrame):
         config.setdefault("other_params", {})
         config["other_params"]["topic"] = book["name"]
         config["other_params"]["genre"] = book.get("genre", "都市")
+        config["other_params"]["style"] = book.get("style", "")
         config["other_params"]["num_chapters"] = book.get("total_chapters", 100)
         config["other_params"]["filepath"] = book.get("filepath", os.path.join("projects", book["name"]))
         self.master.save_config(config)
@@ -328,6 +330,7 @@ class BookshelfPage(ctk.CTkFrame):
                 registry.setdefault("books", []).append({
                     "name": name,
                     "genre": "未分类",
+                    "style": "",
                     "total_chapters": total,
                     "chapters_generated": chapters,
                     "description": "",

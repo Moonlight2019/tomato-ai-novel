@@ -99,6 +99,7 @@ DEFAULT_CONFIG = {
     "other_params": {
         "topic": "",
         "genre": "",
+        "style": "",
         "num_chapters": 0,
         "word_number": 0,
         "filepath": "",
@@ -215,6 +216,7 @@ def validate_choose_configs(config_data: dict) -> list[str]:
 
 def load_config(config_file: str) -> dict:
     """从指定的 config_file 加载配置，若不存在则创建一个默认配置文件。"""
+    config_file = os.path.abspath(config_file)
 
     # 如果配置文件不存在，自动创建默认配置
     if not os.path.exists(config_file):
@@ -223,7 +225,16 @@ def load_config(config_file: str) -> dict:
     try:
         with _config_lock:
             with open(config_file, 'r', encoding='utf-8') as f:
-                return normalize_config(json.load(f))
+                config = normalize_config(json.load(f))
+        # 统一把其他参数里的相对 filepath 解析成绝对路径，
+        # 避免 CWD 变化时（如从别的目录启动 GUI/脚本）生成/读取项目文件找不到。
+        project_root = os.path.dirname(os.path.dirname(config_file))  # .../config/config.json -> 项目根
+        fp = config.get("other_params", {}).get("filepath", "")
+        if fp and not os.path.isabs(fp):
+            config["other_params"]["filepath"] = os.path.normpath(
+                os.path.join(project_root, fp)
+            )
+        return config
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         logging.error(f"配置文件格式错误: {e}")
         return {}
