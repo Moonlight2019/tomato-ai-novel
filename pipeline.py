@@ -51,7 +51,8 @@ class FanqiePipeline:
     def __init__(self, config_path: str = "config/config.json"):
         self.config_path = config_path
         self.config = load_config(config_path)
-        self.enhanced_prompts = get_enhanced_prompts("都市")
+        genre = (self.config.get("other_params", {}) or {}).get("genre") or "都市"
+        self.enhanced_prompts = get_enhanced_prompts(genre)
 
     def step1_generate_architecture(self):
         """
@@ -75,6 +76,9 @@ class FanqiePipeline:
             raise ValueError("请在 config 中设置 other_params.filepath（小说项目目录）")
 
         os.makedirs(filepath, exist_ok=True)
+
+        # 注入与当前题材匹配的增强版 prompt（含题材公式、基调控制）
+        self._patch_prompts()
 
         # 调用原始架构生成（架构阶段用原始 prompt，章节阶段用增强 prompt）
         Novel_architecture_generate(
@@ -112,6 +116,9 @@ class FanqiePipeline:
         blueprint_llm = llm_configs.get(blueprint_llm_name, {})
 
         filepath = params.get("filepath", "")
+
+        # 注入与当前题材匹配的增强版 prompt
+        self._patch_prompts()
 
         Chapter_blueprint_generate(
             interface_format=blueprint_llm.get("interface_format", "openai"),
@@ -362,15 +369,15 @@ class FanqiePipeline:
 
     def _patch_prompts(self):
         """
-        Monkey-patch prompt_definitions 模块，注入增强版 prompt。
+        Monkey-patch prompt_definitions 模块，注入与当前题材匹配的增强版 prompt。
+        使用共享的 patch_prompt_definitions，保证 CLI 与 GUI 行为一致。
         """
-        import prompt_definitions
+        from enhanced_prompts import patch_prompt_definitions
 
-        enhanced = self.enhanced_prompts
-        for key, value in enhanced.items():
-            if value is not None and hasattr(prompt_definitions, key):
-                setattr(prompt_definitions, key, value)
-                logger.debug(f"已替换 prompt: {key}")
+        genre = (self.config.get("other_params", {}) or {}).get("genre") or "都市"
+        patch_prompt_definitions(genre)
+        self.enhanced_prompts = get_enhanced_prompts(genre)
+        logger.info(f"已注入 {genre} 题材的增强版 prompt")
 
 
 def main():
