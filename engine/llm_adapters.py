@@ -69,11 +69,16 @@ def _extract_openai_content(response) -> str:
             if isinstance(content, str):
                 text = content
             elif isinstance(content, list):
+                # 只取真正的文本 part；跳过 reasoning/thinking 等思考块，
+                # 避免 DeepSeek 等推理模型把思考过程拼进正文（第10章泄漏根因）
                 parts = []
                 for item in content:
                     if isinstance(item, str):
                         parts.append(item)
                     elif isinstance(item, dict):
+                        ptype = str(item.get("type", "") or "").lower()
+                        if ptype in ("reasoning", "thinking", "thought", "analysis"):
+                            continue  # 跳过思考
                         t = item.get("text") or item.get("content")
                         if isinstance(t, str):
                             parts.append(t)
@@ -104,6 +109,29 @@ def _extract_openai_content(response) -> str:
     except Exception as e:
         logging.error(f"提取 chat completion 内容失败: {e}")
         return ""
+
+
+def _openai_chat_create(client, model_name, prompt, max_tokens, temperature):
+    """
+    发起 chat.completions.create，默认带 reasoning_effort='none' 以禁用推理模型思考，
+    避免 DeepSeek 等把思考过程写进 content（章节正文被思考污染）。
+    若网关不支持该参数（报 400/unknown parameter），自动回退为不带参数重试一次。
+    """
+    kwargs = dict(
+        model=model_name,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    try:
+        return client.chat.completions.create(reasoning_effort="none", **kwargs)
+    except Exception as e:
+        msg = str(e).lower()
+        # 网关明确不认该参数 → 回退；其余错误（key 无效/限流/连接）原样抛出
+        if "reasoning_effort" in msg or "unknown parameter" in msg or "unknown argument" in msg:
+            logging.warning("当前网关不支持 reasoning_effort，已回退为不带该参数调用")
+            return client.chat.completions.create(**kwargs)
+        raise
 
 class BaseLLMAdapter:
     """
@@ -136,11 +164,8 @@ class DeepSeekAdapter(BaseLLMAdapter):
 
     def invoke(self, prompt: str) -> str:
         try:
-            response = self._client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
+            response = _openai_chat_create(
+                self._client, self.model_name, prompt, self.max_tokens, self.temperature
             )
             return _extract_openai_content(response)
         except Exception as e:
@@ -167,11 +192,8 @@ class OpenAIAdapter(BaseLLMAdapter):
 
     def invoke(self, prompt: str) -> str:
         try:
-            response = self._client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
+            response = _openai_chat_create(
+                self._client, self.model_name, prompt, self.max_tokens, self.temperature
             )
             return _extract_openai_content(response)
         except Exception as e:
