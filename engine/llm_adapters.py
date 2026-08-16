@@ -11,7 +11,6 @@ from azure.ai.inference.models import SystemMessage, UserMessage
 from openai import OpenAI
 import requests
 
-
 def check_base_url(url: str) -> str:
     """
     处理base_url的规则：
@@ -22,14 +21,89 @@ def check_base_url(url: str) -> str:
     url = url.strip()
     if not url:
         return url
-        
+
     if url.endswith('#'):
         return url.rstrip('#')
-        
+
     if not re.search(r'/v\d+$', url):
         if '/v1' not in url:
             url = url.rstrip('/') + '/v1'
     return url
+
+
+def _extract_openai_content(response) -> str:
+    """
+    从 openai SDK 的 chat.completions 响应中，稳健提取正文文本。
+
+    兼容五种情况：
+    1. content 为普通字符串（标准 OpenAI 格式）
+    2. content 为字符串列表（推理流/多段 content）
+    3. 无 content 但有 reasoning_content（推理模型先思考后回复）
+    4. content 为空/None
+    5. 响应不是 OpenAI 对象（如 base_url 配错导致 API 返回 404 文本 "Not Found"）
+
+    返回拼接后的文本；失败时记录日志并返回 ""，绝不抛异常打断上层重试。
+    """
+    try:
+        # 情况5：响应根本不是 OpenAI 对象（base_url 配错 / 网关返回纯文本 404 等）。
+        # 这时 choices 属性不存在，且 response 可能是 str —— 单独提示，避免误判为"空回复"。
+        if not isinstance(response, (str, bytes)):
+            if not getattr(response, "choices", None):
+                logging.warning("No choices in chat completion response.")
+                return ""
+        else:
+            logging.warning(
+                "Chat completion 返回了非 JSON 文本（base_url 或接口可能配置错误）：%r",
+                response[:200] if isinstance(response, str) else response,
+            )
+            return ""
+
+        msg = response.choices[0].message
+        if msg is None:
+            return ""
+
+        content = getattr(msg, "content", None)
+
+        # 情况1/2：content 可能是 str 或 list[part]
+        if content:
+            if isinstance(content, str):
+                text = content
+            elif isinstance(content, list):
+                parts = []
+                for item in content:
+                    if isinstance(item, str):
+                        parts.append(item)
+                    elif isinstance(item, dict):
+                        t = item.get("text") or item.get("content")
+                        if isinstance(t, str):
+                            parts.append(t)
+                text = "".join(parts)
+            else:
+                # 意外类型（如 pydantic message），兜底转字符串
+                text = str(content)
+            text = text.strip()
+            if text:
+                return text
+
+        # 情况3：content 为空时退回 reasoning_content
+        reasoning = getattr(msg, "reasoning_content", None)
+        if reasoning:
+            if isinstance(reasoning, str):
+                text = reasoning.strip()
+                if text:
+                    return text
+            elif isinstance(reasoning, list):
+                parts = [str(x.get("text") or x.get("content") or "") if isinstance(x, dict) else str(x)
+                         for x in reasoning]
+                text = "".join(parts).strip()
+                if text:
+                    return text
+
+        logging.warning("Chat completion returned empty content.")
+        return ""
+    except Exception as e:
+        logging.error(f"提取 chat completion 内容失败: {e}")
+        return ""
 
 class BaseLLMAdapter:
     """
@@ -40,7 +114,11 @@ class BaseLLMAdapter:
 
 class DeepSeekAdapter(BaseLLMAdapter):
     """
-    适配官方/OpenAI兼容接口（使用 langchain.ChatOpenAI）
+    适配官方/OpenAI兼容接口。
+
+    用原生 openai SDK（而非 langchain.ChatOpenAI），避免 chat.completions 返回
+    推理流（content 为数组 / 含 reasoning_content）时 langchain 的 pydantic 绑定
+    抛 "str object has no attribute model_dump"。
     """
     def __init__(self, api_key: str, base_url: str, model_name: str, max_tokens: int, temperature: float = 0.7, timeout: Optional[int] = 600):
         self.base_url = check_base_url(base_url)
@@ -50,25 +128,28 @@ class DeepSeekAdapter(BaseLLMAdapter):
         self.temperature = temperature
         self.timeout = timeout
 
-        self._client = ChatOpenAI(
-            model=self.model_name,
-            api_key=self.api_key,
+        self._client = OpenAI(
+            api_key=api_key,
             base_url=self.base_url,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            timeout=self.timeout
+            timeout=timeout,
         )
 
     def invoke(self, prompt: str) -> str:
-        response = self._client.invoke(prompt)
-        if not response:
-            logging.warning("No response from DeepSeekAdapter.")
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            return _extract_openai_content(response)
+        except Exception as e:
+            logging.error(f"DeepSeek API 调用失败: {e}")
             return ""
-        return response.content
 
 class OpenAIAdapter(BaseLLMAdapter):
     """
-    适配官方/OpenAI兼容接口（使用 langchain.ChatOpenAI）
+    适配官方/OpenAI兼容接口（用原生 openai SDK，解析见 _extract_openai_content）。
     """
     def __init__(self, api_key: str, base_url: str, model_name: str, max_tokens: int, temperature: float = 0.7, timeout: Optional[int] = 600):
         self.base_url = check_base_url(base_url)
@@ -78,21 +159,24 @@ class OpenAIAdapter(BaseLLMAdapter):
         self.temperature = temperature
         self.timeout = timeout
 
-        self._client = ChatOpenAI(
-            model=self.model_name,
-            api_key=self.api_key,
+        self._client = OpenAI(
+            api_key=api_key,
             base_url=self.base_url,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            timeout=self.timeout
+            timeout=timeout,
         )
 
     def invoke(self, prompt: str) -> str:
-        response = self._client.invoke(prompt)
-        if not response:
-            logging.warning("No response from OpenAIAdapter.")
+        try:
+            response = self._client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+            )
+            return _extract_openai_content(response)
+        except Exception as e:
+            logging.error(f"OpenAI API 调用失败: {e}")
             return ""
-        return response.content
 
 class GeminiAdapter(BaseLLMAdapter):
     """
@@ -429,7 +513,14 @@ class MimoAdapter(BaseLLMAdapter):
                 logging.warning("No response from MimoAdapter.")
                 return ""
         except Exception as e:
-            logging.error(f"Mimo API 调用失败: {e}")
+            msg = str(e)
+            if "429" in msg or "quota" in msg.lower() or "rate limit" in msg.lower():
+                logging.error(
+                    "Mimo API 限流/配额不足（429）：可能触发账户限流或 token 额度已用尽。"
+                    "请稍后重试、降低并发，或前往控制台查询配额。原始错误：%s", msg
+                )
+            else:
+                logging.error(f"Mimo API 调用失败: {e}")
             return ""
 
 

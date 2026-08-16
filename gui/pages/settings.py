@@ -253,54 +253,57 @@ PRESET_MODELS = {
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
 
-    # ===== OpenCode Go (订阅制，$10/月，支持11个模型) =====
+    # ===== OpenCode Go (订阅制，$10/月) =====
+    # base_url：https://opencode.ai/zen/go/v1（非 api.opencode.ai，那是占位页）
+    # 模型 ID：用裸 ID（如 deepseek-v4-flash），实测 API 不接受 opencode-go/ 前缀
+    # 端点分三类：chat/completions(openai)、responses(openai 的新 GPT/Grok)、messages(anthropic 的 MiniMax/Qwen)
     "OpenCode Go - DeepSeek V4 Pro": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
         "model_name": "deepseek-v4-pro", "interface_format": "openai",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - DeepSeek V4 Flash": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
         "model_name": "deepseek-v4-flash", "interface_format": "openai",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - Grok 4.5": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
         "model_name": "grok-4.5", "interface_format": "openai",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - Kimi K3": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
         "model_name": "kimi-k3", "interface_format": "openai",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - Qwen3.8 Max": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
-        "model_name": "qwen3.8-max", "interface_format": "openai",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
+        "model_name": "qwen3.8-max", "interface_format": "anthropic",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - GLM-5.2": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
         "model_name": "glm-5.2", "interface_format": "openai",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - MiniMax M3": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
-        "model_name": "minimax-m3", "interface_format": "openai",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
+        "model_name": "minimax-m3", "interface_format": "anthropic",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - GPT 5.6 Luna": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
         "model_name": "gpt-5.6-luna", "interface_format": "openai",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - Qwen3.7 Plus": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
-        "model_name": "qwen3.7-plus", "interface_format": "openai",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
+        "model_name": "qwen3.7-plus", "interface_format": "anthropic",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },
     "OpenCode Go - MiMo V2.5": {
-        "api_key": "", "base_url": "https://api.opencode.ai/v1",
+        "api_key": "", "base_url": "https://opencode.ai/zen/go/v1",
         "model_name": "mimo-v2.5", "interface_format": "openai",
         "temperature": 0.7, "max_tokens": 8192, "timeout": 600
     },

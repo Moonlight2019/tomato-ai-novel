@@ -2,6 +2,7 @@
 config/config.json
 config/books_registry.json
 config/creatives.json
+config/custom_styles.json
 
 # === 用户生成内容 ===
 projects/
