@@ -9,6 +9,11 @@ import customtkinter as ctk
 from gui.animations import AnimatedProgressBar, pulse_widget
 
 
+def _is_placeholder(content, chapter_num) -> bool:
+    """判断是否为"第X章尚未生成"的占位文本（_load_chapter 写入编辑框的占位）。"""
+    return bool(content and content.strip() == f"第{chapter_num}章尚未生成。点击「生成本章」开始。".strip())
+
+
 def _get_llm_for_task(config, task_key):
     """根据任务名称获取对应的LLM配置
     task_key: architecture_llm, chapter_outline_llm, final_chapter_llm, consistency_review_llm
@@ -167,13 +172,29 @@ class WritingPage(ctk.CTkFrame):
             self.wordcount_label.configure(text="字数: 0")
 
     def _save_chapter(self, chapter_num):
+        """保存当前章节。占位文本/空内容不写盘，避免把"未生成章节"误记为已生成。
+        若磁盘上恰好有这类残留，顺带清理。"""
         filepath = self._get_filepath()
         if not filepath:
             return
         chapters_dir = os.path.join(filepath, "chapters")
         os.makedirs(chapters_dir, exist_ok=True)
         chapter_file = os.path.join(chapters_dir, f"chapter_{chapter_num}.txt")
-        content = self.textbox.get("1.0", "end-1c")
+        content = self.textbox.get("1.0", "end-1c").strip()
+
+        # 占位 / 空内容：不写盘
+        if not content or _is_placeholder(content, chapter_num):
+            # 若磁盘上恰好残留占位文件，删掉，避免批量生成时被当成"已生成"
+            if os.path.exists(chapter_file):
+                try:
+                    with open(chapter_file, "r", encoding="utf-8") as f:
+                        disk = f.read().strip()
+                    if not disk or _is_placeholder(disk, chapter_num):
+                        os.remove(chapter_file)
+                except Exception:
+                    pass
+            return
+
         with open(chapter_file, "w", encoding="utf-8") as f:
             f.write(content)
 
@@ -371,11 +392,25 @@ class WritingPage(ctk.CTkFrame):
             self.status_label.configure(text="❌ 请先创建项目", text_color="red")
             return
 
-        # 检查已有章节，确定起始位置
+        # 检查已有章节，确定起始位置（排除占位/空文件，避免把"未生成章节"误判为已生成）
         chapters_dir = os.path.join(filepath, "chapters")
         os.makedirs(chapters_dir, exist_ok=True)
-        existing = [f for f in os.listdir(chapters_dir) if f.startswith("chapter_") and f.endswith(".txt")]
-        existing_nums = sorted([int(f.replace("chapter_", "").replace(".txt", "")) for f in existing])
+        existing = []
+        for f in os.listdir(chapters_dir):
+            if not (f.startswith("chapter_") and f.endswith(".txt")):
+                continue
+            try:
+                num = int(f.replace("chapter_", "").replace(".txt", ""))
+            except ValueError:
+                continue
+            try:
+                with open(os.path.join(chapters_dir, f), "r", encoding="utf-8") as fh:
+                    disk = fh.read().strip()
+            except Exception:
+                disk = ""
+            if disk and not _is_placeholder(disk, num):
+                existing.append(num)
+        existing_nums = sorted(existing)
 
         # 检查断点文件
         checkpoint_file = os.path.join(filepath, "batch_progress.json")
@@ -408,8 +443,9 @@ class WritingPage(ctk.CTkFrame):
             def from_resume():
                 result["choice"] = "resume"
                 dialog.destroy()
-            ctk.CTkButton(btn_frame, text=f"从当前章节(第{current_ch}章)开始", command=from_current).pack(side="left", padx=10)
-            ctk.CTkButton(btn_frame, text=f"从第{start_ch}章继续", command=from_resume, fg_color="#2563eb").pack(side="left", padx=10)
+            ctk.CTkButton(btn_frame, text=f"从当前章节(第{current_ch}章)开始", command=from_current,
+                          fg_color="#2563eb").pack(side="left", padx=10)
+            ctk.CTkButton(btn_frame, text=f"从第{start_ch}章继续", command=from_resume).pack(side="left", padx=10)
             dialog.wait_window()
             if result["choice"] == "cancel":
                 return
