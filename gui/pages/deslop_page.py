@@ -36,9 +36,18 @@ class DeslopPage(ctk.CTkFrame):
         toolbar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
 
         ctk.CTkLabel(toolbar, text="章节:").pack(side="left")
-        self.chapter_var = ctk.StringVar(value="1")
-        self.chapter_select = ctk.CTkOptionMenu(toolbar, variable=self.chapter_var, values=["1"], width=80)
-        self.chapter_select.pack(side="left", padx=5)
+        # 直达输入框：可输入任意章节号（回车加载），避免下拉随章节数无限变长
+        self.chapter_entry_var = ctk.StringVar(value="")
+        self.chapter_entry = ctk.CTkEntry(toolbar, textvariable=self.chapter_entry_var, width=52)
+        self.chapter_entry.pack(side="left", padx=5)
+        self.chapter_entry.bind("<Return>", lambda e: self._load_chapter())
+
+        # 下拉：只放最近 N 章作快捷选择
+        self.chapter_var = ctk.StringVar(value="")
+        self.chapter_select = ctk.CTkOptionMenu(toolbar, variable=self.chapter_var, values=[""],
+                                                width=90, command=self._on_chapter_pick)
+        self.chapter_select.pack(side="left", padx=(0, 5))
+        ctk.CTkLabel(toolbar, text="(最近)", font=ctk.CTkFont(size=11), text_color="gray50").pack(side="left")
 
         ctk.CTkButton(toolbar, text="📂 加载章节", command=self._load_chapter, width=100).pack(side="left", padx=5)
         ctk.CTkButton(toolbar, text="✨ 去AI味", command=self._run_deslop, width=100).pack(side="left", padx=5)
@@ -76,11 +85,28 @@ class DeslopPage(ctk.CTkFrame):
             return None
         return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects", topic)
 
+    def _get_chapter_num(self):
+        """取当前章节号：直达输入框优先，其次下拉。返回数字字符串或空。"""
+        direct = self.chapter_entry_var.get().strip()
+        ch = direct if direct else self.chapter_var.get()
+        ch = (ch or "").strip()
+        if not ch.isdigit():
+            return ""
+        return str(int(ch))
+
+    def _on_chapter_pick(self, value):
+        # 从下拉选择章节时，同步到直达输入框，保证读取源一致
+        if value and value.isdigit():
+            self.chapter_entry_var.set(str(int(value)))
+
     def _load_chapter(self):
         filepath = self._get_filepath()
         if not filepath:
             return
-        ch = self.chapter_var.get()
+        ch = self._get_chapter_num()
+        if not ch:
+            self.status_label.configure(text="请输入有效章节号", text_color="red")
+            return
         chapter_file = os.path.join(filepath, "chapters", f"chapter_{ch}.txt")
         if os.path.exists(chapter_file):
             with open(chapter_file, "r", encoding="utf-8") as f:
@@ -117,7 +143,10 @@ class DeslopPage(ctk.CTkFrame):
         filepath = self._get_filepath()
         if not filepath:
             return
-        ch = self.chapter_var.get()
+        ch = self._get_chapter_num()
+        if not ch:
+            self.status_label.configure(text="请输入有效章节号", text_color="red")
+            return
         content = self.result_text.get("1.0", "end-1c")
         if not content.strip():
             return
@@ -136,4 +165,10 @@ class DeslopPage(ctk.CTkFrame):
                 # 按数字排序而不是字符串排序
                 files = sorted(files, key=lambda x: int(x) if x.isdigit() else 0)
                 if files:
-                    self.chapter_select.configure(values=files)
+                    # 下拉只保留最近 N 章，避免随章节数无限变长；老章节用直达输入框
+                    recent = files[-50:]
+                    self.chapter_select.configure(values=recent)
+                    latest = files[-1]
+                    self.chapter_var.set(latest)
+                    if not self.chapter_entry_var.get().strip():
+                        self.chapter_entry_var.set(latest)
